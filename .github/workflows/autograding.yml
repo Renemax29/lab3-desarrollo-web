@@ -1,0 +1,192 @@
+name: Evaluacion Automatica Lab 3 - HTML5 Semantico
+
+on: [push]
+
+jobs:
+  evaluacion-html:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Descargar codigo del estudiante
+        uses: actions/checkout@v3
+
+      - name: 2. Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: 3. Instalar BeautifulSoup4 para analisis DOM
+        run: |
+          pip install beautifulsoup4
+
+      - name: 4. Evaluacion segun Rubrica de 100 Puntos
+        run: |
+          python -c '
+          import os, sys
+          from bs4 import BeautifulSoup
+
+          print("🔍 Analizando estructura semantica de index.html...\n")
+
+          if not os.path.exists("index.html"):
+              print("❌ ERROR CRÍTICO: No se encontró el archivo index.html en la raíz del repositorio.")
+              sys.exit(1)
+
+          with open("index.html", "r", encoding="utf-8") as f:
+              html_content = f.read()
+
+          soup = BeautifulSoup(html_content, "html.parser")
+          
+          score = 0
+          report = []
+
+          # ==========================================
+          # 1. METADATOS Y SCRIPTING (15 PTS)
+          # ==========================================
+          meta_author = soup.find("meta", attrs={"name": lambda x: x and x.lower() == "author"})
+          meta_desc = soup.find("meta", attrs={"name": lambda x: x and x.lower() == "description"})
+          script_tag = soup.find("script")
+          noscript_tag = soup.find("noscript")
+
+          p_meta = 0
+          if meta_author and "TU NOMBRE" not in meta_author.get("content", ""):
+              p_meta += 4
+          else:
+              report.append("  ⚠️ Meta autor incompleto o con valor por defecto.")
+
+          if meta_desc: p_meta += 3
+          else: report.append("  ⚠️ Falta meta description.")
+
+          if script_tag: p_meta += 4
+          else: report.append("  ⚠️ Falta etiqueta <script>.")
+
+          if noscript_tag: p_meta += 4
+          else: report.append("  ⚠️ Falta etiqueta <noscript>.")
+
+          score += p_meta
+          print(f"1. Metadatos y Scripting: {p_meta}/15 pts")
+
+          # ==========================================
+          # 2. SECCIONES Y AGRUPACIÓN (25 PTS)
+          # ==========================================
+          sec_tags = ["header", "nav", "main", "section", "article", "aside", "footer"]
+          p_sec = 0
+          
+          for tag in sec_tags:
+              if soup.find(tag):
+                  p_sec += 2
+              else:
+                  report.append(f"  ⚠️ Falta etiqueta de sección: <{tag}>")
+
+          figure = soup.find("figure")
+          figcaption = figure.find("figcaption") if figure else None
+          if figure and figcaption:
+              p_sec += 6
+          else:
+              report.append("  ⚠️ Falta estructura <figure> con <figcaption>.")
+
+          blockquote = soup.find("blockquote")
+          cite_tag = soup.find("cite")
+          if blockquote and cite_tag:
+              p_sec += 5
+          else:
+              report.append("  ⚠️ Falta <blockquote> con <cite>.")
+
+          score += p_sec
+          print(f"2. Secciones y Agrupación: {p_sec}/25 pts")
+
+          # ==========================================
+          # 3. ESTRUCTURA DE TABLA (25 PTS)
+          # ==========================================
+          p_tabla = 0
+          table = soup.find("table")
+          
+          if table:
+              p_tabla += 3
+              if table.find("caption"): p_tabla += 4
+              else: report.append("  ⚠️ La tabla no tiene <caption>.")
+              
+              if table.find("thead") and table.find("th"): p_tabla += 5
+              else: report.append("  ⚠️ La tabla no tiene <thead> o <th>.")
+              
+              tbody = table.find("tbody")
+              if tbody and len(tbody.find_all("tr")) >= 3: 
+                  p_tabla += 8
+              else: 
+                  report.append("  ⚠️ <tbody> debe tener al menos 3 filas (<tr>).")
+              
+              tfoot = table.find("tfoot")
+              if tfoot and tfoot.find(attrs={"colspan": True}): 
+                  p_tabla += 5
+              else: 
+                  report.append("  ⚠️ <tfoot> debe existir y usar atributo colspan.")
+          else:
+              report.append("  ⚠️ No se encontró la etiqueta <table>.")
+
+          score += p_tabla
+          print(f"3. Estructura de Tabla: {p_tabla}/25 pts")
+
+          # ==========================================
+          # 4. SEMÁNTICA DE TEXTO (15 PTS)
+          # ==========================================
+          text_tags = ["mark", "code", "time", "small"]
+          p_texto = 0
+
+          for tag in text_tags:
+              if soup.find(tag):
+                  p_texto += 3
+              else:
+                  report.append(f"  ⚠️ Falta etiqueta semántica: <{tag}>")
+
+          if soup.find("strong") or soup.find("b"):
+              p_texto += 3
+          else:
+              report.append("  ⚠️ Falta etiqueta <strong>.")
+
+          score += p_texto
+          print(f"4. Semántica de Texto: {p_texto}/15 pts")
+
+          # ==========================================
+          # 5. CONTENIDO INCRUSTADO (20 PTS)
+          # ==========================================
+          p_incrustado = 0
+          img = soup.find("img")
+          if img and img.get("alt"):
+              p_incrustado += 7
+          else:
+              report.append("  ⚠️ Etiqueta <img> ausente o sin atributo alt.")
+
+          audio_video = soup.find("audio") or soup.find("video")
+          if audio_video:
+              p_incrustado += 6
+          else:
+              report.append("  ⚠️ Falta etiqueta <audio> o <video>.")
+
+          iframe = soup.find("iframe")
+          if iframe:
+              p_incrustado += 7
+          else:
+              report.append("  ⚠️ Falta etiqueta <iframe>.")
+
+          score += p_incrustado
+          print(f"5. Contenido Incrustado: {p_incrustado}/20 pts")
+
+          # ==========================================
+          # RESULTADO FINAL
+          # ==========================================
+          print("\n------------------------------------------")
+          print(f"📊 CALIFICACIÓN FINAL: {score} / 100 PTS")
+          print("------------------------------------------\n")
+
+          if report:
+              print("📌 Observaciones para mejorar:")
+              for msg in report:
+                  print(msg)
+              print("\n")
+
+          if score < 71:
+              print("❌ EVALUACIÓN FALLIDA: Se requiere una nota mínima de 71 pts para aprobar.")
+              sys.exit(1)
+
+          print("🎉 ¡FELICITACIONES! Laboratorio aprobado con éxito.")
+          sys.exit(0)
+          '
