@@ -19,7 +19,7 @@ jobs:
         run: |
           pip install beautifulsoup4
 
-      - name: 4. Evaluacion Estricta segun Rubrica (100 PTS)
+      - name: 4. Evaluacion Inteligente de TODOs (100 PTS)
         run: |
           python -c '
           import os, sys
@@ -44,7 +44,8 @@ jobs:
           meta_author = soup.find("meta", attrs={"name": lambda x: x and x.lower() == "author"})
           meta_desc = soup.find("meta", attrs={"name": lambda x: x and x.lower() == "description"})
           
-          if meta_author and "TU NOMBRE" not in meta_author.get("content", "").upper():
+          author_text = meta_author.get("content", "").upper() if meta_author else ""
+          if meta_author and "TU NOMBRE" not in author_text and "CÉDULA" not in author_text and len(author_text) > 5:
               p_meta += 4
           else:
               report.append("  ❌ [TODO 1] Debe reemplazar \"TU NOMBRE Y APELLIDO - CÉDULA\" por sus datos reales.")
@@ -63,13 +64,18 @@ jobs:
           for tag in ["header", "nav", "main", "section", "article", "aside", "footer"]:
               if soup.find(tag): p_sec += 2
 
-          # Validar TODO 2 (blockquote + cite)
+          # Validar TODO 2 (Cita personalizada)
           bq = soup.find("blockquote")
           cite = soup.find("cite")
-          if bq and cite and len(bq.text.strip()) > 10:
-              p_sec += 11
+          default_quote = "La Web no es solo para consumir información"
+          
+          if bq and cite:
+              if default_quote in bq.text and "Tim Berners-Lee" in cite.text and len(soup.find_all("blockquote")) == 1:
+                  report.append("  ❌ [TODO 2] No ha personalizado la cita (aún conserva el texto por defecto de Tim Berners-Lee).")
+              else:
+                  p_sec += 11
           else:
-              report.append("  ❌ [TODO 2] Falta agregar la cita con <blockquote> y su fuente con <cite>.")
+              report.append("  ❌ [TODO 2] Falta la estructura <blockquote> con <cite>.")
 
           score += p_sec
           print(f"2. Secciones y Agrupación: {p_sec}/25 pts")
@@ -86,10 +92,13 @@ jobs:
               
               tbody = table.find("tbody")
               rows = tbody.find_all("tr") if tbody else []
-              if len(rows) >= 3:
+              
+              # Revisa si la tabla conserva exactamente el texto de la plantilla original
+              default_row_text = "Introducción y Arquitectura Web"
+              if len(rows) > 3 or (len(rows) >= 3 and not any(default_row_text in r.text for r in rows)):
                   p_tabla += 8
               else:
-                  report.append(f"  ❌ [TODO 3] El <tbody> debe contener al menos 3 filas (<tr>). Encontradas: {len(rows)}.")
+                  report.append("  ❌ [TODO 3] Debe agregar nuevas filas de contenido a la tabla o personalizar las existentes (se detectaron solo las filas por defecto).")
               
               tfoot = table.find("tfoot")
               if tfoot and tfoot.find(attrs={"colspan": True}): p_tabla += 5
@@ -113,25 +122,34 @@ jobs:
           # ------------------------------------------
           p_incrustado = 0
           
-          # Validar TODO 4 (figure + img con alt + figcaption)
+          # Validar TODO 4 (Imagen sin placeholder)
           fig = soup.find("figure")
           img = fig.find("img") if fig else None
           cap = fig.find("figcaption") if fig else None
+          
           if fig and img and cap and img.get("alt"):
-              p_incrustado += 7
+              if "via.placeholder.com" in img.get("src", ""):
+                  report.append("  ❌ [TODO 4] Debe reemplazar la imagen placeholder por defecto (via.placeholder.com) por una imagen o URL real.")
+              else:
+                  p_incrustado += 7
           else:
-              report.append("  ❌ [TODO 4] Falta incluir la estructura <figure> con <img> (y su atributo alt) y <figcaption>.")
+              report.append("  ❌ [TODO 4] Falta incluir la estructura <figure> con <img> y <figcaption>.")
 
-          # Validar TODO 5 (audio o video)
+          # Validar TODO 5 (Audio/Video real)
           media = soup.find("audio") or soup.find("video")
-          if media and (media.get("controls") is not None or media.find("source")):
-              p_incrustado += 6
+          if media:
+              source = media.find("source")
+              src_val = source.get("src", "") if source else media.get("src", "")
+              if src_val == "audio-demo.mp3" or src_val == "":
+                  report.append("  ❌ [TODO 5] Debe reemplazar la ruta de prueba \"audio-demo.mp3\" por un archivo de audio o video real.")
+              else:
+                  p_incrustado += 6
           else:
-              report.append("  ❌ [TODO 5] Falta agregar un reproductor de <audio> o <video> con sus controles.")
+              report.append("  ❌ [TODO 5] Falta agregar un reproductor de <audio> o <video>.")
 
-          # Validar TODO 6 (iframe)
+          # Validar TODO 6 (Iframe)
           iframe = soup.find("iframe")
-          if iframe and iframe.get("src"):
+          if iframe and iframe.get("src") and len(iframe.get("src")) > 10:
               p_incrustado += 7
           else:
               report.append("  ❌ [TODO 6] Falta agregar un recurso incrustado con la etiqueta <iframe>.")
